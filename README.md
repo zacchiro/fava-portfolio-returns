@@ -81,26 +81,33 @@ The default value is automatically selected based on the browser's locale: Chine
 The **Asset Allocation** tab compares the current allocation of one or more
 portfolios against a target allocation, and suggests how much to buy or sell to
 rebalance. Holdings are valued at the latest known prices (as of the end of the
-selected date range) in the selected currency. Configure the portfolios with
-the `asset_allocation` option:
+selected date range) in the selected currency.
+
+The target allocation is read from a separate YAML file, so the same file can be
+shared with other tools (e.g. a CLI rebalancing script). Point to it with the
+`asset_allocation_config` option:
 ```
 2010-01-01 custom "fava-extension" "fava_portfolio_returns" "{
   'beangrow_config': 'beangrow.pbtxt',
-  'asset_allocation_threshold': 5,
-  'asset_allocation': [
-    {
-      'name': 'My Portfolio',
-      'accounts': ['Assets:Broker:Investments:'],
-      'assets': [
-        {'commodity': 'ETF_FOO', 'target': '60%'},
-        {'commodity': 'ETF_BAR', 'target': '40%'},
-      ],
-    },
-  ],
+  'asset_allocation_config': 'asset-allocation.yaml',
+  # 'asset_allocation_threshold': 5,
 }"
 ```
 
-- `accounts`: one or more account regexes (matched like Beanquery's `~` operator); all commodities held in matching accounts are considered.
+`asset-allocation.yaml`:
+```yaml
+portfolios:
+  - name: My Portfolio
+    accounts:
+      - "Assets:Broker:Investments:"
+    assets:
+      - commodity: ETF_FOO
+        target: 60%
+      - commodity: ETF_BAR
+        target: 40%
+```
+
+- `accounts`: one or more account regexes (matched like Beanquery's `~` operator); all commodities held in matching accounts are considered. Quote patterns ending in a colon, otherwise YAML parses them as a mapping.
 - `assets`: the target allocation per commodity; the targets should sum to 100%.
 - `asset_allocation_threshold` (optional, default `5`): assets diverging by more than ±this many percentage points from their target are highlighted.
 

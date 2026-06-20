@@ -20,20 +20,20 @@ export const AssetAllocationRoute = createRoute({
   component: AssetAllocation,
 });
 
-const EXAMPLE_CONFIG = `2010-01-01 custom "fava-extension" "fava_portfolio_returns" "{
+const EXAMPLE_DIRECTIVE = `2010-01-01 custom "fava-extension" "fava_portfolio_returns" "{
   'beangrow_config': 'beangrow.pbtxt',
-  'asset_allocation_threshold': 5,
-  'asset_allocation': [
-    {
-      'name': 'My Portfolio',
-      'accounts': ['Assets:Broker:Investments:'],
-      'assets': [
-        {'commodity': 'ETF_FOO', 'target': '60%'},
-        {'commodity': 'ETF_BAR', 'target': '40%'},
-      ],
-    },
-  ],
+  'asset_allocation_config': 'asset-allocation.yaml',
 }"`;
+
+const EXAMPLE_YAML = `portfolios:
+  - name: My Portfolio
+    accounts:
+      - "Assets:Broker:Investments:"
+    assets:
+      - commodity: ETF_FOO
+        target: 60%
+      - commodity: ETF_BAR
+        target: 40%`;
 
 function AssetAllocation() {
   const { t } = useTranslation();
@@ -54,10 +54,12 @@ function AssetAllocation() {
           <Panel
             title={t("Asset Allocation")}
             help={t(
-              "Compares the current asset allocation of your portfolios against a target allocation. Define one or more portfolios in the 'asset_allocation' option of the extension configuration:",
+              "Compares the current asset allocation of your portfolios against a target allocation. Point the 'asset_allocation_config' option to a YAML file (shareable with the asset-allocation CLI script):",
             )}
           >
-            <pre>{EXAMPLE_CONFIG}</pre>
+            <pre>{EXAMPLE_DIRECTIVE}</pre>
+            <p>{t("Example asset-allocation.yaml:")}</p>
+            <pre>{EXAMPLE_YAML}</pre>
           </Panel>
         </DashboardRow>
       </Dashboard>

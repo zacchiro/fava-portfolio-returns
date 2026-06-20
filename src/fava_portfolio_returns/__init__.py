@@ -23,9 +23,8 @@ from fava.ext import extension_endpoint
 from fava.helpers import FavaAPIError
 from flask import request
 
-from fava_portfolio_returns.api.asset_allocation import AssetAllocationConfig
 from fava_portfolio_returns.api.asset_allocation import asset_allocation_report
-from fava_portfolio_returns.api.asset_allocation import parse_asset_allocation_config
+from fava_portfolio_returns.api.asset_allocation import load_asset_allocation_config
 from fava_portfolio_returns.api.cash_flows import cash_flows_chart
 from fava_portfolio_returns.api.cash_flows import cash_flows_table
 from fava_portfolio_returns.api.cash_flows import dividends_chart
@@ -57,7 +56,7 @@ class ExtConfig:
     pnl_color_scheme: Optional[str]
     language: Optional[str]
     locale: Optional[str]
-    asset_allocation: list[AssetAllocationConfig]
+    asset_allocation_config: Optional[Path]
     asset_allocation_threshold: Decimal
 
 
@@ -105,6 +104,9 @@ class FavaPortfolioReturns(FavaExtensionBase):
         if beangrow_debug_dir:
             beangrow_debug_dir = self.ledger.join_path(beangrow_debug_dir)
 
+        asset_allocation_config = cfg.get("asset_allocation_config")
+        if asset_allocation_config:
+            asset_allocation_config = self.ledger.join_path(asset_allocation_config)
         threshold = cfg.get("asset_allocation_threshold", DEFAULT_ASSET_ALLOCATION_THRESHOLD)
 
         return ExtConfig(
@@ -113,7 +115,7 @@ class FavaPortfolioReturns(FavaExtensionBase):
             pnl_color_scheme=cfg.get("pnl_color_scheme"),
             language=cfg.get("language", self.ledger.fava_options.language),
             locale=cfg.get("locale", self.ledger.fava_options.locale),
-            asset_allocation=parse_asset_allocation_config(cfg.get("asset_allocation")),
+            asset_allocation_config=asset_allocation_config,
             asset_allocation_threshold=Decimal(str(threshold)),
         )
 
@@ -310,10 +312,16 @@ class FavaPortfolioReturns(FavaExtensionBase):
             if isinstance(entry, Commodity) and entry.meta.get("name")
         }
 
+        portfolios_config = (
+            load_asset_allocation_config(ext_config.asset_allocation_config)
+            if ext_config.asset_allocation_config
+            else []
+        )
+
         portfolios = asset_allocation_report(
             entries,
             portfolio.pricer,
-            ext_config.asset_allocation,
+            portfolios_config,
             toolbar_ctx.target_currency,
             toolbar_ctx.end_date,
             ext_config.asset_allocation_threshold,

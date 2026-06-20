@@ -3,14 +3,17 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from typing import Optional
 from typing import Sequence
 
+import yaml
 from beancount.core.data import Directive
 from beancount.core.data import Transaction
 from beancount.core.inventory import Inventory
 from beancount.core.number import ZERO
+from fava.helpers import FavaAPIError
 
 from fava_portfolio_returns.core.pricer import CurrencyConversionException
 from fava_portfolio_returns.core.pricer import Pricer
@@ -38,35 +41,62 @@ def parse_pct(value) -> Decimal:
     return Decimal(str(value))
 
 
-def parse_asset_allocation_config(raw: Any) -> list[AssetAllocationConfig]:
-    """Parse and minimally validate the `asset_allocation` extension config.
+def parse_portfolios(raw: Any) -> list[AssetAllocationConfig]:
+    """Parse and minimally validate a list of portfolio definitions.
 
     Expects a list of portfolios, each with a `name`, a list of `accounts`
     (account regexes) and a list of `assets` (mappings with `commodity` and
-    `target`). Mirrors the YAML format of the `asset-allocation` CLI script.
+    `target`).
     """
     if not raw:
         return []
     if not isinstance(raw, list):
-        raise ValueError("'asset_allocation' must be a list of portfolios")
+        raise FavaAPIError("'portfolios' must be a list of portfolios")
 
     portfolios = []
     for portfolio in raw:
         if not isinstance(portfolio, dict):
-            raise ValueError("each asset_allocation portfolio must be a mapping")
+            raise FavaAPIError("each portfolio must be a mapping")
         name = portfolio.get("name", "<unnamed>")
         accounts = portfolio.get("accounts") or []
         if not isinstance(accounts, list) or not accounts:
-            raise ValueError(f"portfolio '{name}': missing 'accounts'")
+            raise FavaAPIError(f"portfolio '{name}': missing 'accounts'")
 
         targets: dict[str, Decimal] = {}
         for asset in portfolio.get("assets") or []:
             if not isinstance(asset, dict) or "commodity" not in asset or "target" not in asset:
-                raise ValueError(f"portfolio '{name}': each asset needs a 'commodity' and a 'target'")
+                raise FavaAPIError(f"portfolio '{name}': each asset needs a 'commodity' and a 'target'")
             targets[asset["commodity"]] = parse_pct(asset["target"])
 
         portfolios.append(AssetAllocationConfig(name=name, accounts=list(accounts), targets=targets))
     return portfolios
+
+
+def load_asset_allocation_config(path: Path) -> list[AssetAllocationConfig]:
+    """Load the target asset allocation from a YAML configuration file.
+
+    The file format matches the `asset-allocation` CLI script, so the same
+    file can be shared between the CLI and this plugin::
+
+        portfolios:
+          - name: My Portfolio
+            accounts:                 # one or more account regexes
+              - Assets:Broker:Investments:
+            assets:                   # target allocation, should sum to 100%
+              - commodity: ETF_FOO
+                target: 60%
+              - commodity: ETF_BAR
+                target: 40%
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    except OSError as ex:
+        raise FavaAPIError(f"Cannot read asset allocation configuration file {path}: {ex}") from ex
+
+    if not isinstance(config, dict) or "portfolios" not in config:
+        raise FavaAPIError(f"{path}: missing top-level 'portfolios' key.")
+    return parse_portfolios(config["portfolios"])
 
 
 def portfolio_holdings(

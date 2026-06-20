@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-* feat: add Asset Allocation tab to compare current vs. target allocation and suggest rebalancing
+* feat: add Asset Allocation tab to compare current vs. target allocation and suggest rebalancing; the target allocation is read from a shareable YAML file (`asset_allocation_config`)
 
 ## v2.7.0 (2026-07-04)
 * feat: support multiple currencies per account [#190](https://github.com/andreasgerstmayr/fava-portfolio-returns/pull/190) ([@andreasgerstmayr](https://github.com/andreasgerstmayr))

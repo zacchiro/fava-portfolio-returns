@@ -1,13 +1,16 @@
 from decimal import Decimal
 
+import pytest
 from beancount import loader
 from beancount.core import prices
 from beancount.core.data import Commodity
+from fava.helpers import FavaAPIError
 
 from fava_portfolio_returns.api.asset_allocation import AssetAllocationConfig
 from fava_portfolio_returns.api.asset_allocation import asset_allocation_report
-from fava_portfolio_returns.api.asset_allocation import parse_asset_allocation_config
+from fava_portfolio_returns.api.asset_allocation import load_asset_allocation_config
 from fava_portfolio_returns.api.asset_allocation import parse_pct
+from fava_portfolio_returns.api.asset_allocation import parse_portfolios
 from fava_portfolio_returns.core.pricer import Pricer
 
 LEDGER = """
@@ -62,7 +65,7 @@ def test_parse_pct():
     assert parse_pct(25) == Decimal("25")
 
 
-def test_parse_config():
+def test_parse_portfolios():
     raw = [
         {
             "name": "p1",
@@ -70,10 +73,38 @@ def test_parse_config():
             "assets": [{"commodity": "AAA", "target": "60%"}, {"commodity": "BBB", "target": "40%"}],
         }
     ]
-    [portfolio] = parse_asset_allocation_config(raw)
+    [portfolio] = parse_portfolios(raw)
     assert portfolio.name == "p1"
     assert portfolio.accounts == ["Assets:Broker:"]
     assert portfolio.targets == {"AAA": Decimal("60"), "BBB": Decimal("40")}
+
+
+def test_load_config(tmp_path):
+    config_file = tmp_path / "asset-allocation.yaml"
+    config_file.write_text(
+        """
+portfolios:
+  - name: p1
+    accounts:
+      - "Assets:Broker:"
+    assets:
+      - commodity: AAA
+        target: 60%
+      - commodity: BBB
+        target: 40%
+"""
+    )
+    [portfolio] = load_asset_allocation_config(config_file)
+    assert portfolio.name == "p1"
+    assert portfolio.accounts == ["Assets:Broker:"]
+    assert portfolio.targets == {"AAA": Decimal("60"), "BBB": Decimal("40")}
+
+
+def test_load_config_missing_portfolios_key(tmp_path):
+    config_file = tmp_path / "bad.yaml"
+    config_file.write_text("foo: bar\n")
+    with pytest.raises(FavaAPIError):
+        load_asset_allocation_config(config_file)
 
 
 def test_allocation_and_deviation():

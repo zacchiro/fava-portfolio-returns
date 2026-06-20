@@ -1,0 +1,25 @@
+# Target asset allocation, shared with the `asset-allocation` CLI script.
+# Account patterns are regexes (matched like Beanquery's `~` operator); quote
+# them if they end with a colon, otherwise YAML parses them as a mapping.
+portfolios:
+  - name: ETrade
+    accounts:
+      - "Assets:US:ETrade:"
+    assets:
+      - commodity: ITOT
+        target: 40%
+      - commodity: VEA
+        target: 25%
+      - commodity: VHT
+        target: 20%
+      - commodity: GLD
+        target: 15%
+
+  - name: Vanguard
+    accounts:
+      - "Assets:US:Vanguard:"
+    assets:
+      - commodity: RGAGX
+        target: 60%
+      - commodity: VBMPX
+        target: 40%
