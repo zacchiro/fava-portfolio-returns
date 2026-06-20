@@ -5,6 +5,7 @@ import os
 import traceback
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 from typing import Optional
@@ -12,6 +13,7 @@ from typing import Sequence
 from typing import cast
 
 from beancount import Directive
+from beancount.core.data import Commodity
 from fava.beans.abc import Directive as FavaDirective
 from fava.beans.abc import Price
 from fava.beans.abc import Transaction
@@ -21,6 +23,9 @@ from fava.ext import extension_endpoint
 from fava.helpers import FavaAPIError
 from flask import request
 
+from fava_portfolio_returns.api.asset_allocation import AssetAllocationConfig
+from fava_portfolio_returns.api.asset_allocation import asset_allocation_report
+from fava_portfolio_returns.api.asset_allocation import parse_asset_allocation_config
 from fava_portfolio_returns.api.cash_flows import cash_flows_chart
 from fava_portfolio_returns.api.cash_flows import cash_flows_table
 from fava_portfolio_returns.api.cash_flows import dividends_chart
@@ -42,6 +47,9 @@ if loglevel := os.environ.get("LOGLEVEL"):
     logger.setLevel(loglevel.upper())
 
 
+DEFAULT_ASSET_ALLOCATION_THRESHOLD = Decimal("5")  # percentage points
+
+
 @dataclass(frozen=True)
 class ExtConfig:
     beangrow_config_path: Path
@@ -49,6 +57,8 @@ class ExtConfig:
     pnl_color_scheme: Optional[str]
     language: Optional[str]
     locale: Optional[str]
+    asset_allocation: list[AssetAllocationConfig]
+    asset_allocation_threshold: Decimal
 
 
 @dataclass(frozen=True)
@@ -95,12 +105,16 @@ class FavaPortfolioReturns(FavaExtensionBase):
         if beangrow_debug_dir:
             beangrow_debug_dir = self.ledger.join_path(beangrow_debug_dir)
 
+        threshold = cfg.get("asset_allocation_threshold", DEFAULT_ASSET_ALLOCATION_THRESHOLD)
+
         return ExtConfig(
             beangrow_config_path=self.ledger.join_path(cfg.get("beangrow_config", "beangrow.pbtxt")),
             beangrow_debug_dir=beangrow_debug_dir,
             pnl_color_scheme=cfg.get("pnl_color_scheme"),
             language=cfg.get("language", self.ledger.fava_options.language),
             locale=cfg.get("locale", self.ledger.fava_options.locale),
+            asset_allocation=parse_asset_allocation_config(cfg.get("asset_allocation")),
+            asset_allocation_threshold=Decimal(str(threshold)),
         )
 
     def get_toolbar_ctx(self) -> ToolbarContext:
@@ -281,6 +295,31 @@ class FavaPortfolioReturns(FavaExtensionBase):
 
         missing_prices, commands = p.get_missing_prices()
         return {"missingPrices": missing_prices, "commands": commands}
+
+    @extension_endpoint("asset_allocation")
+    @api_response
+    def api_asset_allocation(self):
+        ext_config = self.read_ext_config()
+        toolbar_ctx = self.get_toolbar_ctx()
+        portfolio = self.get_portfolio()
+        entries = cast(list[Directive], list(self.ledger.all_entries))
+
+        names = {
+            entry.currency: entry.meta["name"]
+            for entry in entries
+            if isinstance(entry, Commodity) and entry.meta.get("name")
+        }
+
+        portfolios = asset_allocation_report(
+            entries,
+            portfolio.pricer,
+            ext_config.asset_allocation,
+            toolbar_ctx.target_currency,
+            toolbar_ctx.end_date,
+            ext_config.asset_allocation_threshold,
+            names,
+        )
+        return {"portfolios": portfolios}
 
 
 def get_ledger_duration(entries: Sequence[FavaDirective]) -> tuple[date, date]:

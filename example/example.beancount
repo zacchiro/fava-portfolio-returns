@@ -13,6 +13,27 @@ plugin "beancount.plugins.implicit_prices"
   'beangrow_config': 'beangrow.pbtxt',
   # 'pnl_color_scheme': 'green-red',
   # 'beangrow_debug_dir': 'debug',
+  'asset_allocation_threshold': 5,
+  'asset_allocation': [
+    {
+      'name': 'ETrade',
+      'accounts': ['Assets:US:ETrade:'],
+      'assets': [
+        {'commodity': 'ITOT', 'target': '40%'},
+        {'commodity': 'VEA', 'target': '25%'},
+        {'commodity': 'VHT', 'target': '20%'},
+        {'commodity': 'GLD', 'target': '15%'},
+      ],
+    },
+    {
+      'name': 'Vanguard',
+      'accounts': ['Assets:US:Vanguard:'],
+      'assets': [
+        {'commodity': 'RGAGX', 'target': '60%'},
+        {'commodity': 'VBMPX', 'target': '40%'},
+      ],
+    },
+  ],
 }"
 
 
