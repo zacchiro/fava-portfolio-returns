@@ -230,7 +230,8 @@ function AllocationChart({
       },
     },
     legend: { bottom: 0 },
-    grid: { left: 120, right: 20, top: 10, bottom: 30 },
+    // extra bottom margin so the x-axis labels clear the legend below them
+    grid: { left: 120, right: 20, top: 10, bottom: 55 },
     xAxis: {
       type: "value",
       axisLabel: { formatter: (value: number) => pct(value) },
@@ -272,7 +273,7 @@ function CommoditySection({
 }) {
   const { t } = useTranslation();
   const currencyFormatter = useCurrencyFormatter(portfolio.currency);
-  const height = `${Math.max(120, report.assets.length * 34 + 60)}px`;
+  const height = `${Math.max(140, report.assets.length * 34 + 80)}px`;
 
   return (
     <Stack sx={{ gap: 1 }}>
@@ -390,7 +391,7 @@ function ClassSection({
 }) {
   const { t } = useTranslation();
   const currencyFormatter = useCurrencyFormatter(portfolio.currency);
-  const height = `${Math.max(120, report.classes.length * 34 + 60)}px`;
+  const height = `${Math.max(140, report.classes.length * 34 + 80)}px`;
 
   return (
     <Stack sx={{ gap: 1 }}>
