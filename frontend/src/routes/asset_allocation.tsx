@@ -207,29 +207,56 @@ function AllocationChart({
   height: string;
 }) {
   const { t } = useTranslation();
+  const theme = useTheme();
   const percentFormatter = usePercentFormatter();
   // reverse so the first item appears at the top of the (inverted) category axis
   const idx = labels.map((_, i) => i).reverse();
+  const pct = (value: number) => percentFormatter(value / 100);
 
   const option: EChartsOption = {
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
-      valueFormatter: (value) => (typeof value === "number" ? percentFormatter(value / 100) : String(value)),
+      // one bar (Current) plus a Target marker per row; show both values cleanly
+      formatter: (params) => {
+        const items = Array.isArray(params) ? params : [params];
+        const category = items[0]?.name ?? "";
+        const lines = items.map((item) => {
+          const raw = item.value;
+          const value = Array.isArray(raw) ? Number(raw[0]) : Number(raw);
+          return `${item.marker ?? ""} ${item.seriesName ?? ""}: ${pct(value)}`;
+        });
+        return [category, ...lines].join("<br/>");
+      },
     },
     legend: { bottom: 0 },
     grid: { left: 120, right: 20, top: 10, bottom: 30 },
     xAxis: {
       type: "value",
-      axisLabel: { formatter: (value: number) => percentFormatter(value / 100) },
+      axisLabel: { formatter: (value: number) => pct(value) },
     },
     yAxis: {
       type: "category",
       data: idx.map((i) => labels[i]),
     },
     series: [
-      { type: "bar", name: t("Target"), data: idx.map((i) => target[i]) },
-      { type: "bar", name: t("Current"), data: idx.map((i) => current[i]) },
+      {
+        type: "bar",
+        name: t("Current"),
+        barWidth: "55%",
+        data: idx.map((i) => current[i]),
+      },
+      {
+        // target drawn as a thin vertical marker across the bar (bullet-chart style),
+        // like Fava's budget bars: the bar shows the current value, the tick the target
+        type: "scatter",
+        name: t("Target"),
+        symbol: "rect",
+        symbolSize: [3, 22],
+        itemStyle: { color: theme.palette.text.primary },
+        z: 3,
+        data: labels.map((label, i) => [target[i], label]),
+      },
     ],
   };
 
