@@ -4,6 +4,8 @@ import { fetchJSON } from "./api";
 
 interface AssetAllocationRequest {
   targetCurrency: string;
+  /** class rebalancing: fewest trades instead of proportional split */
+  minimize: boolean;
 }
 
 export interface AssetAllocationAsset {
@@ -27,6 +29,56 @@ export interface AssetAllocationHolding {
   commodity: string;
   name: string;
   value: number;
+  /** why the holding was excluded (only set for class reports) */
+  reason?: string;
+}
+
+/** a per-commodity buy/sell suggestion within an asset class */
+export interface AssetAllocationMember {
+  commodity: string;
+  name: string;
+  value: number;
+  /** trade amount in the target currency (positive => sell, negative => buy) */
+  tradeValue: number;
+}
+
+export interface AssetAllocationClassRow {
+  assetClass: string;
+  targetPct: number;
+  currentPct: number;
+  value: number;
+  devPct: number;
+  devValue: number;
+  over: boolean;
+  /** per-commodity rebalance breakdown that closes this class's gap */
+  members: AssetAllocationMember[];
+  /** true if nothing is currently held in this class */
+  noHoldings: boolean;
+  /** amount (target currency) that could not be reconciled within constraints */
+  shortfall: number;
+}
+
+/** by-commodity sub-report */
+export interface AssetAllocationCommodityReport {
+  diverged: boolean;
+  assets: AssetAllocationAsset[];
+  /** held commodities that are not part of the target allocation */
+  unconfigured: AssetAllocationHolding[];
+  /** sum of the target allocation, should be 100% */
+  targetSum: number;
+  targetSumOk: boolean;
+}
+
+/** by-asset-class sub-report */
+export interface AssetAllocationClassReport {
+  diverged: boolean;
+  /** whether the fewest-trades rebalancing strategy was used */
+  minimize: boolean;
+  classes: AssetAllocationClassRow[];
+  /** held commodities without a targeted asset class */
+  unconfigured: AssetAllocationHolding[];
+  targetSum: number;
+  targetSumOk: boolean;
 }
 
 export interface AssetAllocationPortfolio {
@@ -37,16 +89,12 @@ export interface AssetAllocationPortfolio {
   totalValue: number;
   /** divergence threshold in percentage points */
   threshold: number;
-  /** whether any asset diverges beyond the threshold */
-  diverged: boolean;
-  assets: AssetAllocationAsset[];
-  /** held commodities that are not part of the target allocation */
-  unconfigured: AssetAllocationHolding[];
   /** held commodities that could not be valued (no known price) */
   unpriced: string[];
-  /** sum of the target allocation, should be 100% */
-  targetSum: number;
-  targetSumOk: boolean;
+  /** by-commodity sub-report, or null if the portfolio defines no commodities */
+  commodityReport: AssetAllocationCommodityReport | null;
+  /** by-asset-class sub-report, or null if the portfolio defines no classes */
+  classReport: AssetAllocationClassReport | null;
 }
 
 export interface AssetAllocationResponse {
@@ -56,6 +104,9 @@ export interface AssetAllocationResponse {
 export function useAssetAllocation(request: AssetAllocationRequest): UseQueryResult<AssetAllocationResponse> {
   const params = useFavaFilterSearchParams();
   params.set("currency", request.targetCurrency);
+  if (request.minimize) {
+    params.set("minimize", "1");
+  }
   const url = `asset_allocation?${params}`;
 
   return useQuery({

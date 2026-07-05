@@ -24,6 +24,7 @@ from fava.helpers import FavaAPIError
 from flask import request
 
 from fava_portfolio_returns.api.asset_allocation import asset_allocation_report
+from fava_portfolio_returns.api.asset_allocation import commodity_asset_classes
 from fava_portfolio_returns.api.asset_allocation import load_asset_allocation_config
 from fava_portfolio_returns.api.cash_flows import cash_flows_chart
 from fava_portfolio_returns.api.cash_flows import cash_flows_table
@@ -57,7 +58,8 @@ class ExtConfig:
     language: Optional[str]
     locale: Optional[str]
     asset_allocation_config: Optional[Path]
-    asset_allocation_threshold: Decimal
+    # None when the directive omits it, so YAML/default precedence can apply
+    asset_allocation_threshold: Optional[Decimal]
 
 
 @dataclass(frozen=True)
@@ -107,7 +109,7 @@ class FavaPortfolioReturns(FavaExtensionBase):
         asset_allocation_config = cfg.get("asset_allocation_config")
         if asset_allocation_config:
             asset_allocation_config = self.ledger.join_path(asset_allocation_config)
-        threshold = cfg.get("asset_allocation_threshold", DEFAULT_ASSET_ALLOCATION_THRESHOLD)
+        threshold = cfg.get("asset_allocation_threshold")
 
         return ExtConfig(
             beangrow_config_path=self.ledger.join_path(cfg.get("beangrow_config", "beangrow.pbtxt")),
@@ -116,7 +118,7 @@ class FavaPortfolioReturns(FavaExtensionBase):
             language=cfg.get("language", self.ledger.fava_options.language),
             locale=cfg.get("locale", self.ledger.fava_options.locale),
             asset_allocation_config=asset_allocation_config,
-            asset_allocation_threshold=Decimal(str(threshold)),
+            asset_allocation_threshold=Decimal(str(threshold)) if threshold is not None else None,
         )
 
     def get_toolbar_ctx(self) -> ToolbarContext:
@@ -311,12 +313,27 @@ class FavaPortfolioReturns(FavaExtensionBase):
             for entry in entries
             if isinstance(entry, Commodity) and entry.meta.get("name")
         }
+        minimize = request.args.get("minimize") in ("1", "true")
 
-        portfolios_config = (
+        config_file = (
             load_asset_allocation_config(ext_config.asset_allocation_config)
             if ext_config.asset_allocation_config
-            else []
+            else None
         )
+        portfolios_config = config_file.portfolios if config_file else []
+
+        # threshold precedence: code default (5%) < config file < directive option
+        if ext_config.asset_allocation_threshold is not None:
+            threshold = ext_config.asset_allocation_threshold
+        elif config_file and config_file.divergence_threshold is not None:
+            threshold = config_file.divergence_threshold
+        else:
+            threshold = DEFAULT_ASSET_ALLOCATION_THRESHOLD
+        if threshold < Decimal(0) or threshold > Decimal(100):
+            raise FavaAPIError(f"asset allocation threshold {threshold}% is out of range [0, 100]")
+
+        asset_class_key = config_file.asset_class_key if config_file else "asset-class"
+        asset_classes = commodity_asset_classes(entries, asset_class_key)
 
         portfolios = asset_allocation_report(
             entries,
@@ -324,8 +341,10 @@ class FavaPortfolioReturns(FavaExtensionBase):
             portfolios_config,
             toolbar_ctx.target_currency,
             toolbar_ctx.end_date,
-            ext_config.asset_allocation_threshold,
-            names,
+            threshold,
+            asset_classes=asset_classes,
+            names=names,
+            minimize=minimize,
         )
         return {"portfolios": portfolios}
 
