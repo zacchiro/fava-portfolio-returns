@@ -12,7 +12,6 @@ interface Resources {
     "<p>Volatility measures how strongly returns vary over time. It is based on period returns from the Time-Weighted Rate of Return (TWR), so the effects of cash flows are eliminated. The value shown is annualized: higher volatility means larger return swings (more risk), lower volatility means more stable returns.</p>": "<p>Volatility measures how strongly returns vary over time. It is based on period returns from the Time-Weighted Rate of Return (TWR), so the effects of cash flows are eliminated. The value shown is annualized: higher volatility means larger return swings (more risk), lower volatility means more stable returns.</p>";
     "<p>fava-portfolio-returns supports multiple ways to calculate the portfolio performance.</p>": "<p>fava-portfolio-returns supports multiple ways to calculate the portfolio performance.</p>";
     "Accounts: {{accounts}} — Total value: {{total}}": "Accounts: {{accounts}} — Total value: {{total}}";
-    "All assets are within ±{{threshold}}% of the target allocation.": "All assets are within ±{{threshold}}% of the target allocation.";
     "All required prices are available in the ledger.": "All required prices are available in the ledger.";
     Allocation: "Allocation";
     Amount: "Amount";
@@ -27,6 +26,7 @@ interface Resources {
     "Cash Flows": "Cash Flows";
     "Cash flows excl. dividends": "Cash flows excl. dividends";
     "Closest date in ledger": "Closest date in ledger";
+    "Collapse {{title}}": "Collapse {{title}}";
     Commodity: "Commodity";
     "Compare with": "Compare with";
     "Compares the current asset allocation of your portfolios against a target allocation. Point the 'asset_allocation_config' option to a YAML file (shareable with the asset-allocation CLI script):": "Compares the current asset allocation of your portfolios against a target allocation. Point the 'asset_allocation_config' option to a YAML file (shareable with the asset-allocation CLI script):";
@@ -41,6 +41,7 @@ interface Resources {
     Dividends: "Dividends";
     "Entire Year": "Entire Year";
     "Example asset-allocation.yaml:": "Example asset-allocation.yaml:";
+    "Expand {{title}}": "Expand {{title}}";
     "Fetch Required Prices": "Fetch Required Prices";
     Groups: "Groups";
     "Held commodity {{commodity}} ({{value}}) is excluded from the class allocation: {{reason}}.": "Held commodity {{commodity}} ({{value}}) is excluded from the class allocation: {{reason}}.";
@@ -79,6 +80,7 @@ interface Resources {
     Periods: "Periods";
     Portfolio: "Portfolio";
     "Portfolio Value": "Portfolio Value";
+    Portfolios: "Portfolios";
     "Realized P/L": "Realized P/L";
     "Realized Profit and Loss: P&L from sold assets": "Realized Profit and Loss: P&L from sold assets";
     Rebalance: "Rebalance";
@@ -117,6 +119,7 @@ interface Resources {
     yearly: "yearly";
     yes: "yes";
     "{{metricName}} (rolling 1y)": "{{metricName}} (rolling 1y)";
+    "⚠ Diverges by {{dev}} from target (beyond ±{{threshold}}%)": "⚠ Diverges by {{dev}} from target (beyond ±{{threshold}}%)";
   };
 }
 

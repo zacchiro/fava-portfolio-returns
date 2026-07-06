@@ -17,6 +17,7 @@ import { EChart } from "../components/EChart";
 import { useCurrencyFormatter, usePercentFormatter } from "../components/format";
 import { useToolbarContext } from "../components/Header/ToolbarProvider";
 import { Loading } from "../components/Loading";
+import { PortfolioSelection } from "../components/PortfolioSelection";
 import { RootRoute } from "./__root";
 
 export const AssetAllocationRoute = createRoute({
@@ -84,6 +85,8 @@ function AssetAllocation() {
   const { t } = useTranslation();
   const { targetCurrency } = useToolbarContext();
   const [minimize, setMinimize] = useState(false);
+  // empty means "show all" (the default); adding names restricts the view to them
+  const [selectedPortfolios, setSelectedPortfolios] = useState<string[]>([]);
   const { isPending, error, data } = useAssetAllocation({ targetCurrency, minimize });
 
   if (isPending) {
@@ -116,18 +119,33 @@ function AssetAllocation() {
   }
 
   const hasClassReport = data.portfolios.some((portfolio) => portfolio.classReport !== null);
+  const allNames = data.portfolios.map((portfolio) => portfolio.name);
+  const visiblePortfolios =
+    selectedPortfolios.length === 0
+      ? data.portfolios
+      : data.portfolios.filter((portfolio) => selectedPortfolios.includes(portfolio.name));
 
   return (
     <Dashboard>
-      {hasClassReport && (
-        <DashboardRow>
-          <FormControlLabel
-            control={<Switch checked={minimize} onChange={(e) => setMinimize(e.target.checked)} />}
-            label={t("Minimize the number of trades when rebalancing asset classes")}
-          />
+      {(data.portfolios.length > 1 || hasClassReport) && (
+        <DashboardRow sx={{ alignItems: "center", flexWrap: "wrap" }}>
+          {data.portfolios.length > 1 && (
+            <PortfolioSelection
+              label={t("Portfolios")}
+              options={allNames}
+              selected={selectedPortfolios}
+              setSelected={setSelectedPortfolios}
+            />
+          )}
+          {hasClassReport && (
+            <FormControlLabel
+              control={<Switch checked={minimize} onChange={(e) => setMinimize(e.target.checked)} />}
+              label={t("Minimize the number of trades when rebalancing asset classes")}
+            />
+          )}
         </DashboardRow>
       )}
-      {data.portfolios.map((portfolio) => (
+      {visiblePortfolios.map((portfolio) => (
         <DashboardRow key={portfolio.name}>
           <PortfolioReport portfolio={portfolio} />
         </DashboardRow>
@@ -139,6 +157,7 @@ function AssetAllocation() {
 function PortfolioReport({ portfolio }: { portfolio: AssetAllocationPortfolio }) {
   const { t } = useTranslation();
   const currencyFormatter = useCurrencyFormatter(portfolio.currency);
+  const [collapsed, setCollapsed] = useState(false);
 
   const help = t("Accounts: {{accounts}} — Total value: {{total}}", {
     accounts: portfolio.accounts.join(", "),
@@ -146,7 +165,14 @@ function PortfolioReport({ portfolio }: { portfolio: AssetAllocationPortfolio })
   });
 
   return (
-    <Panel title={portfolio.name} help={help} sx={{ flex: 1 }}>
+    <Panel
+      title={portfolio.name}
+      help={help}
+      sx={{ flex: 1 }}
+      collapsible
+      collapsed={collapsed}
+      onToggleCollapsed={() => setCollapsed((c) => !c)}
+    >
       <Stack sx={{ gap: 2 }}>
         {portfolio.unpriced.map((commodity) => (
           <Alert severity="warning" key={commodity}>
@@ -177,13 +203,9 @@ function ReportAlerts({
   const { t } = useTranslation();
   return (
     <>
-      {diverged ? (
+      {diverged && (
         <Alert severity="warning">
           {t("Some assets diverge by more than ±{{threshold}}% from the target allocation.", { threshold })}
-        </Alert>
-      ) : (
-        <Alert severity="success">
-          {t("All assets are within ±{{threshold}}% of the target allocation.", { threshold })}
         </Alert>
       )}
       {!targetSumOk && (
@@ -199,11 +221,17 @@ function AllocationChart({
   labels,
   target,
   current,
+  over,
+  threshold,
   height,
 }: {
   labels: string[];
   target: number[];
   current: number[];
+  /** whether each label diverges beyond the threshold (drawn bold + red) */
+  over: boolean[];
+  /** divergence threshold in percentage points (for the tooltip wording) */
+  threshold: number;
   height: string;
 }) {
   const { t } = useTranslation();
@@ -212,6 +240,8 @@ function AllocationChart({
   // reverse so the first item appears at the top of the (inverted) category axis
   const idx = labels.map((_, i) => i).reverse();
   const pct = (value: number) => percentFormatter(value / 100);
+  // labels of over-threshold rows, highlighted on the category axis
+  const overLabels = new Set(labels.filter((_, i) => over[i]));
 
   const option: EChartsOption = {
     tooltip: {
@@ -221,11 +251,25 @@ function AllocationChart({
       formatter: (params) => {
         const items = Array.isArray(params) ? params : [params];
         const category = items[0]?.name ?? "";
+        const seriesValue = (name: string) => {
+          const raw = items.find((item) => item.seriesName === name)?.value;
+          return Array.isArray(raw) ? Number(raw[0]) : Number(raw);
+        };
         const lines = items.map((item) => {
           const raw = item.value;
           const value = Array.isArray(raw) ? Number(raw[0]) : Number(raw);
           return `${item.marker ?? ""} ${item.seriesName ?? ""}: ${pct(value)}`;
         });
+        // for a highlighted (over-threshold) row, explain the divergence and its size
+        if (overLabels.has(category)) {
+          const dev = seriesValue(t("Current")) - seriesValue(t("Target"));
+          lines.push(
+            t("⚠ Diverges by {{dev}} from target (beyond ±{{threshold}}%)", {
+              dev: `${dev >= 0 ? "+" : ""}${pct(dev)}`,
+              threshold,
+            }),
+          );
+        }
         return [category, ...lines].join("<br/>");
       },
     },
@@ -239,6 +283,10 @@ function AllocationChart({
     yAxis: {
       type: "category",
       data: idx.map((i) => labels[i]),
+      axisLabel: {
+        formatter: (label: string) => (overLabels.has(label) ? `{over|${label}}` : label),
+        rich: { over: { color: theme.pnl.loss, fontWeight: "bold" } },
+      },
     },
     series: [
       {
@@ -293,6 +341,8 @@ function CommoditySection({
         labels={report.assets.map((a) => a.commodity)}
         target={report.assets.map((a) => a.targetPct)}
         current={report.assets.map((a) => a.currentPct)}
+        over={report.assets.map((a) => a.over)}
+        threshold={portfolio.threshold}
         height={height}
       />
       <CommodityTable portfolio={portfolio} report={report} />
@@ -412,6 +462,8 @@ function ClassSection({
         labels={report.classes.map((c) => c.assetClass)}
         target={report.classes.map((c) => c.targetPct)}
         current={report.classes.map((c) => c.currentPct)}
+        over={report.classes.map((c) => c.over)}
+        threshold={portfolio.threshold}
         height={height}
       />
       <ClassTable portfolio={portfolio} report={report} />
