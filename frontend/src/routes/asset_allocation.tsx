@@ -1,7 +1,6 @@
 import { Alert, FormControlLabel, FormGroup, Stack, Switch, Theme, useTheme } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import { createRoute } from "@tanstack/react-router";
-import { EChartsOption } from "echarts";
 import { Fragment, ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -13,7 +12,7 @@ import {
   useAssetAllocation,
 } from "../api/asset_allocation";
 import { Dashboard, DashboardRow, Panel } from "../components/Dashboard";
-import { EChart } from "../components/EChart";
+import { EChart, EChartsSpec } from "../components/EChart";
 import { useCurrencyFormatter, usePercentFormatter } from "../components/format";
 import { useToolbarContext } from "../components/Header/ToolbarProvider";
 import { Loading } from "../components/Loading";
@@ -250,6 +249,7 @@ function ReportAlerts({
 
 function AllocationChart({
   labels,
+  names,
   target,
   current,
   over,
@@ -257,6 +257,8 @@ function AllocationChart({
   height,
 }: {
   labels: string[];
+  /** full name of each label (e.g. the fund name), shown in the tooltip */
+  names?: string[];
   target: number[];
   current: number[];
   /** whether each label diverges beyond the threshold (drawn bold + red) */
@@ -270,11 +272,14 @@ function AllocationChart({
   const percentFormatter = usePercentFormatter();
   // reverse so the first item appears at the top of the (inverted) category axis
   const idx = labels.map((_, i) => i).reverse();
+  const axisLabels = idx.map((i) => labels[i]);
   const pct = (value: number) => percentFormatter(value / 100);
   // labels of over-threshold rows, highlighted on the category axis
   const overLabels = new Set(labels.filter((_, i) => over[i]));
+  // hovering an axis label pops up that row's tooltip, which spells out the full name
+  const axisLabelTooltip = names !== undefined;
 
-  const option: EChartsOption = {
+  const option: EChartsSpec = {
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
@@ -282,6 +287,7 @@ function AllocationChart({
       formatter: (params) => {
         const items = Array.isArray(params) ? params : [params];
         const category = items[0]?.name ?? "";
+        const name = names?.[labels.indexOf(category)];
         const seriesValue = (name: string) => {
           const raw = items.find((item) => item.seriesName === name)?.value;
           return Array.isArray(raw) ? Number(raw[0]) : Number(raw);
@@ -301,7 +307,7 @@ function AllocationChart({
             }),
           );
         }
-        return [category, ...lines].join("<br/>");
+        return [name ? commodityLabel(category, name) : category, ...lines].join("<br/>");
       },
     },
     legend: { bottom: 0 },
@@ -313,7 +319,8 @@ function AllocationChart({
     },
     yAxis: {
       type: "category",
-      data: idx.map((i) => labels[i]),
+      data: axisLabels,
+      triggerEvent: axisLabelTooltip,
       axisLabel: {
         formatter: (label: string) => (overLabels.has(label) ? `{over|${label}}` : label),
         rich: { over: { color: theme.pnl.loss, fontWeight: "bold" } },
@@ -338,6 +345,29 @@ function AllocationChart({
         data: labels.map((label, i) => [target[i], label]),
       },
     ],
+    // the axis labels are outside the grid, so the axis tooltip does not cover them:
+    // show/hide it by hand while the pointer is over one
+    onMouseOver: axisLabelTooltip
+      ? (params, chart) => {
+          if (params.componentType !== "yAxis") {
+            return;
+          }
+          const dataIndex = axisLabels.indexOf(String(params.value));
+          if (dataIndex >= 0) {
+            // pin it to the pointer: by default it lands on the bar, which sits at a
+            // different distance from each label
+            const { offsetX = 0, offsetY = 0 } = params.event ?? {};
+            chart.dispatchAction({ type: "showTip", seriesIndex: 0, dataIndex, position: [offsetX + 12, offsetY] });
+          }
+        }
+      : undefined,
+    onMouseOut: axisLabelTooltip
+      ? (params, chart) => {
+          if (params.componentType === "yAxis") {
+            chart.dispatchAction({ type: "hideTip" });
+          }
+        }
+      : undefined,
   };
 
   return <EChart height={height} option={option} />;
@@ -367,6 +397,7 @@ function CommoditySection({
       ))}
       <AllocationChart
         labels={report.assets.map((a) => a.commodity)}
+        names={report.assets.map((a) => a.name)}
         target={report.assets.map((a) => a.targetPct)}
         current={report.assets.map((a) => a.currentPct)}
         over={report.assets.map((a) => a.over)}
