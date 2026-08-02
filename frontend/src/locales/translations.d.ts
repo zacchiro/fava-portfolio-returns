@@ -20,8 +20,6 @@ interface Resources {
     "Asset classes are read from each commodity's 'asset-class' metadata (hierarchical, ':'-separated).": "Asset classes are read from each commodity's 'asset-class' metadata (hierarchical, ':'-separated).";
     "Buy {{amount}}": "Buy {{amount}}";
     "Buy/Sell points": "Buy/Sell points";
-    "By asset class": "By asset class";
-    "By commodity": "By commodity";
     "Calculating Portfolio Returns": "Calculating Portfolio Returns";
     "Cash Flows": "Cash Flows";
     "Cash flows excl. dividends": "Cash flows excl. dividends";
@@ -119,6 +117,8 @@ interface Resources {
     yearly: "yearly";
     yes: "yes";
     "{{metricName}} (rolling 1y)": "{{metricName}} (rolling 1y)";
+    "{{portfolio}} (by class)": "{{portfolio}} (by class)";
+    "{{portfolio}} (by commodity)": "{{portfolio}} (by commodity)";
     "⚠ Diverges by {{dev}} from target (beyond ±{{threshold}}%)": "⚠ Diverges by {{dev}} from target (beyond ±{{threshold}}%)";
   };
 }

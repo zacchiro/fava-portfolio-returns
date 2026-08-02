@@ -1,8 +1,8 @@
-import { Alert, FormControlLabel, Stack, Switch, Theme, Typography, useTheme } from "@mui/material";
+import { Alert, FormControlLabel, Stack, Switch, Theme, useTheme } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import { createRoute } from "@tanstack/react-router";
 import { EChartsOption } from "echarts";
-import { useState } from "react";
+import { Fragment, ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AssetAllocationAsset,
@@ -38,16 +38,17 @@ const EXAMPLE_YAML = `portfolios:
   - name: My Portfolio
     accounts:
       - "Assets:Broker:Investments:"
-    commodities:              # per-commodity targets, should sum to 100%
-      - commodity: ETF_FOO
-        target: 60%
-      - commodity: ETF_BAR
-        target: 40%
-    classes:                  # per-asset-class targets, should sum to 100%
-      - asset-class: stocks
-        target: 70%
-      - asset-class: bonds
-        target: 30%`;
+    allocation:               # the target asset allocation, by...
+      commodities:            # ... commodity, should sum to 100%
+        - commodity: ETF_FOO
+          target: 60%
+        - commodity: ETF_BAR
+          target: 40%
+      classes:                # ... asset class, should sum to 100%
+        - asset-class: stocks
+          target: 70%
+        - asset-class: bonds
+          target: 30%`;
 
 const MONO = '"Fira Mono", monospace';
 
@@ -145,16 +146,42 @@ function AssetAllocation() {
           )}
         </DashboardRow>
       )}
+      {/* each allocation of a portfolio (by commodity, by class) is its own report */}
       {visiblePortfolios.map((portfolio) => (
-        <DashboardRow key={portfolio.name}>
-          <PortfolioReport portfolio={portfolio} />
-        </DashboardRow>
+        <Fragment key={portfolio.name}>
+          {portfolio.commodityReport && (
+            <DashboardRow>
+              <ReportPanel
+                portfolio={portfolio}
+                title={t("{{portfolio}} (by commodity)", { portfolio: portfolio.name })}
+              >
+                <CommoditySection portfolio={portfolio} report={portfolio.commodityReport} />
+              </ReportPanel>
+            </DashboardRow>
+          )}
+          {portfolio.classReport && (
+            <DashboardRow>
+              <ReportPanel portfolio={portfolio} title={t("{{portfolio}} (by class)", { portfolio: portfolio.name })}>
+                <ClassSection portfolio={portfolio} report={portfolio.classReport} />
+              </ReportPanel>
+            </DashboardRow>
+          )}
+        </Fragment>
       ))}
     </Dashboard>
   );
 }
 
-function PortfolioReport({ portfolio }: { portfolio: AssetAllocationPortfolio }) {
+/** one top-level report: a single allocation of a single portfolio */
+function ReportPanel({
+  portfolio,
+  title,
+  children,
+}: {
+  portfolio: AssetAllocationPortfolio;
+  title: string;
+  children: ReactNode;
+}) {
   const { t } = useTranslation();
   const currencyFormatter = useCurrencyFormatter(portfolio.currency);
   const [collapsed, setCollapsed] = useState(false);
@@ -168,7 +195,7 @@ function PortfolioReport({ portfolio }: { portfolio: AssetAllocationPortfolio })
 
   return (
     <Panel
-      title={portfolio.name}
+      title={title}
       help={help}
       sx={{ flex: 1 }}
       collapsible
@@ -176,6 +203,7 @@ function PortfolioReport({ portfolio }: { portfolio: AssetAllocationPortfolio })
       onToggleCollapsed={() => setCollapsed((c) => !c)}
     >
       <Stack sx={{ gap: 2 }}>
+        {/* the portfolio's holdings, hence repeated in each of its reports */}
         {portfolio.unpriced.map((commodity) => (
           <Alert severity="warning" key={commodity}>
             {t("Held commodity {{commodity}} has no known price and is excluded from the valuation.", {
@@ -183,8 +211,7 @@ function PortfolioReport({ portfolio }: { portfolio: AssetAllocationPortfolio })
             })}
           </Alert>
         ))}
-        {portfolio.commodityReport && <CommoditySection portfolio={portfolio} report={portfolio.commodityReport} />}
-        {portfolio.classReport && <ClassSection portfolio={portfolio} report={portfolio.classReport} />}
+        {children}
       </Stack>
     </Panel>
   );
@@ -327,9 +354,6 @@ function CommoditySection({
 
   return (
     <Stack sx={{ gap: 1 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-        {t("By commodity")}
-      </Typography>
       <ReportAlerts threshold={portfolio.threshold} {...report} />
       {report.unconfigured.map((holding) => (
         <Alert severity="warning" key={holding.commodity}>
@@ -447,9 +471,6 @@ function ClassSection({
 
   return (
     <Stack sx={{ gap: 1 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-        {t("By asset class")}
-      </Typography>
       <ReportAlerts threshold={portfolio.threshold} {...report} />
       {report.unconfigured.map((holding) => (
         <Alert severity="warning" key={holding.commodity}>
