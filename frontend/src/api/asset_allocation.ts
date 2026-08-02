@@ -1,4 +1,4 @@
-import { useQuery, UseQueryResult } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, UseQueryResult } from "@tanstack/react-query";
 import { useFavaFilterSearchParams } from "../routes/__root";
 import { fetchJSON } from "./api";
 
@@ -112,5 +112,8 @@ export function useAssetAllocation(request: AssetAllocationRequest): UseQueryRes
   return useQuery({
     queryKey: [url],
     queryFn: () => fetchJSON<AssetAllocationResponse>(url),
+    // the reports stay on screen while a refetch runs, so flipping the rebalancing
+    // strategy (its toggle sits below them) does not scroll the page away
+    placeholderData: keepPreviousData,
   });
 }

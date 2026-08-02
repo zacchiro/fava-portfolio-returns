@@ -1,4 +1,4 @@
-import { Alert, FormControlLabel, Stack, Switch, Theme, useTheme } from "@mui/material";
+import { Alert, FormControlLabel, FormGroup, Stack, Switch, Theme, useTheme } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import { createRoute } from "@tanstack/react-router";
 import { EChartsOption } from "echarts";
@@ -128,22 +128,14 @@ function AssetAllocation() {
 
   return (
     <Dashboard>
-      {(data.portfolios.length > 1 || hasClassReport) && (
+      {data.portfolios.length > 1 && (
         <DashboardRow sx={{ alignItems: "center", flexWrap: "wrap" }}>
-          {data.portfolios.length > 1 && (
-            <PortfolioSelection
-              label={t("Portfolios")}
-              options={allNames}
-              selected={selectedPortfolios}
-              setSelected={setSelectedPortfolios}
-            />
-          )}
-          {hasClassReport && (
-            <FormControlLabel
-              control={<Switch checked={minimize} onChange={(e) => setMinimize(e.target.checked)} />}
-              label={t("Minimize the number of trades when rebalancing asset classes")}
-            />
-          )}
+          <PortfolioSelection
+            label={t("Portfolios")}
+            options={allNames}
+            selected={selectedPortfolios}
+            setSelected={setSelectedPortfolios}
+          />
         </DashboardRow>
       )}
       {/* each allocation of a portfolio (by commodity, by class) is its own report */}
@@ -168,6 +160,16 @@ function AssetAllocation() {
           )}
         </Fragment>
       ))}
+      {hasClassReport && (
+        <DashboardRow>
+          <FormGroup>
+            <FormControlLabel
+              control={<Switch checked={minimize} onChange={(e) => setMinimize(e.target.checked)} />}
+              label={t("Minimize the number of trades when rebalancing asset classes")}
+            />
+          </FormGroup>
+        </DashboardRow>
+      )}
     </Dashboard>
   );
 }
