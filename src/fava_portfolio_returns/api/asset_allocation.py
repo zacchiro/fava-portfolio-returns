@@ -28,13 +28,16 @@ SUM_TOLERANCE = Decimal("0.1")
 # default commodity metadata key holding the (hierarchical) asset class
 DEFAULT_ASSET_CLASS_KEY = "asset-class"
 
+# target block name under a portfolio's 'allocation', per report kind
+ALLOC_BLOCKS = {"commodity": "commodities", "class": "classes"}
+
 
 @dataclass(frozen=True)
 class AssetAllocationConfig:
     """Configuration of a single portfolio's target asset allocation.
 
-    A portfolio may define per-commodity targets, per-asset-class targets, or
-    both; each block (when present) should sum to 100%.
+    A portfolio's `allocation` may define per-commodity targets, per-asset-class
+    targets, or both; each block (when present) should sum to 100%.
     """
 
     name: str
@@ -44,6 +47,8 @@ class AssetAllocationConfig:
     commodity_targets: dict[str, Decimal] = field(default_factory=dict)
     # mapping of asset class -> target allocation in percent (insertion-ordered)
     class_targets: dict[str, Decimal] = field(default_factory=dict)
+    # optional per-portfolio divergence threshold, overriding the file-level one
+    divergence_threshold: Optional[Decimal] = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +72,21 @@ def parse_pct(value) -> Decimal:
 def quantize(amount: Decimal) -> Decimal:
     """Round a currency amount to cents (banker's rounding)."""
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+
+
+def parse_threshold(value: Any, where: str) -> Decimal:
+    """Parse and range-check a 'divergence-threshold' setting.
+
+    `where` locates the setting in error messages (e.g. the file path or the
+    portfolio it belongs to).
+    """
+    try:
+        threshold = parse_pct(value)
+    except (ArithmeticError, ValueError) as ex:
+        raise FavaAPIError(f"{where}: invalid divergence-threshold '{value}'") from ex
+    if threshold < ZERO or threshold > Decimal("100"):
+        raise FavaAPIError(f"{where}: divergence-threshold {threshold}% is out of range [0, 100]")
+    return threshold
 
 
 def parse_targets(name: str, entries: Any, item_key: str, label: str) -> dict[str, Decimal]:
@@ -99,19 +119,39 @@ def parse_targets(name: str, entries: Any, item_key: str, label: str) -> dict[st
                 f"portfolio '{name}': {label} '{item}' has an invalid target '{entry['target']}'"
             ) from ex
         if target < ZERO or target > Decimal("100"):
-            raise FavaAPIError(
-                f"portfolio '{name}': {label} '{item}' target {target}% is out of range [0, 100]"
-            )
+            raise FavaAPIError(f"portfolio '{name}': {label} '{item}' target {target}% is out of range [0, 100]")
         targets[item] = target
     return targets
+
+
+def parse_allocation(name: str, portfolio: dict) -> Any:
+    """Return a portfolio's `allocation` block, rejecting the pre-`allocation` layout.
+
+    The target blocks used to sit directly in the portfolio; they now live under
+    an explicit `allocation` key, shared with the asset-allocation CLI script.
+    """
+    allocation = portfolio.get("allocation")
+    if allocation is None:
+        legacy = [key for key in ALLOC_BLOCKS.values() if portfolio.get(key)]
+        if legacy:
+            raise FavaAPIError(
+                f"portfolio '{name}': "
+                + " and ".join(f"'{key}'" for key in legacy)
+                + " must be nested under an 'allocation' key"
+            )
+        raise FavaAPIError(f"portfolio '{name}': no 'allocation' defined")
+    if not isinstance(allocation, dict):
+        raise FavaAPIError(f"portfolio '{name}': 'allocation' must be a mapping")
+    return allocation
 
 
 def parse_portfolios(raw: Any) -> list[AssetAllocationConfig]:
     """Parse and minimally validate a list of portfolio definitions.
 
-    Each portfolio has a `name`, a list of `accounts` (account regexes) and a
-    `commodities` and/or `classes` block (at least one is required). Each block
-    is a list of mappings (`commodity`/`asset-class` plus `target`).
+    Each portfolio has a `name`, a list of `accounts` (account regexes) and an
+    `allocation` block holding `commodities` and/or `classes` (at least one is
+    required), each a list of mappings (`commodity`/`asset-class` plus
+    `target`). A portfolio may also carry its own `divergence-threshold`.
     """
     if not raw:
         return []
@@ -132,10 +172,15 @@ def parse_portfolios(raw: Any) -> list[AssetAllocationConfig]:
         if not isinstance(accounts, list) or not accounts:
             raise FavaAPIError(f"portfolio '{name}': missing 'accounts'")
 
-        commodities = portfolio.get("commodities")
-        classes = portfolio.get("classes")
+        threshold = portfolio.get("divergence-threshold")
+        if threshold is not None:
+            threshold = parse_threshold(threshold, f"portfolio '{name}'")
+
+        allocation = parse_allocation(name, portfolio)
+        commodities = allocation.get(ALLOC_BLOCKS["commodity"])
+        classes = allocation.get(ALLOC_BLOCKS["class"])
         if not commodities and not classes:
-            raise FavaAPIError(f"portfolio '{name}': no 'commodities' or 'classes' defined")
+            raise FavaAPIError(f"portfolio '{name}': allocation defines no 'commodities' or 'classes'")
 
         commodity_targets = parse_targets(name, commodities, "commodity", "commodity") if commodities else {}
         class_targets = parse_targets(name, classes, "asset-class", "class") if classes else {}
@@ -146,6 +191,7 @@ def parse_portfolios(raw: Any) -> list[AssetAllocationConfig]:
                 accounts=list(accounts),
                 commodity_targets=commodity_targets,
                 class_targets=class_targets,
+                divergence_threshold=threshold,
             )
         )
     return portfolios
@@ -164,16 +210,18 @@ def load_asset_allocation_config(path: Path) -> AssetAllocationFile:
           - name: My Portfolio
             accounts:                 # one or more account regexes
               - Assets:Broker:Investments:
-            commodities:              # per-commodity target, should sum to 100%
-              - commodity: ETF_FOO
-                target: 60%
-              - commodity: ETF_BAR
-                target: 40%
-            classes:                  # per-asset-class target, should sum to 100%
-              - asset-class: stocks
-                target: 70%
-              - asset-class: bonds
-                target: 30%
+            divergence-threshold: 3%  # optional; overrides the file-level one
+            allocation:               # the target asset allocation, by...
+              commodities:            # ... commodity, should sum to 100%
+                - commodity: ETF_FOO
+                  target: 60%
+                - commodity: ETF_BAR
+                  target: 40%
+              classes:                # ... asset class, should sum to 100%
+                - asset-class: stocks
+                  target: 70%
+                - asset-class: bonds
+                  target: 30%
     """
     try:
         with open(path, encoding="utf-8") as f:
@@ -188,12 +236,7 @@ def load_asset_allocation_config(path: Path) -> AssetAllocationFile:
 
     divergence_threshold = None
     if config.get("divergence-threshold") is not None:
-        try:
-            divergence_threshold = parse_pct(config["divergence-threshold"])
-        except (ArithmeticError, ValueError) as ex:
-            raise FavaAPIError(
-                f"{path}: invalid divergence-threshold '{config['divergence-threshold']}'."
-            ) from ex
+        divergence_threshold = parse_threshold(config["divergence-threshold"], str(path))
 
     return AssetAllocationFile(
         portfolios=parse_portfolios(config["portfolios"]),
@@ -310,9 +353,7 @@ def proportional_split(
     the sign of `dev_value` (positive => sell, negative => buy).
     """
     members_sorted = sorted(members.items(), key=lambda kv: kv[1], reverse=True)
-    assignments = [
-        (commodity, value, quantize(dev_value * value / cur_value)) for commodity, value in members_sorted
-    ]
+    assignments = [(commodity, value, quantize(dev_value * value / cur_value)) for commodity, value in members_sorted]
     return _apply_residual(assignments, dev_value)
 
 
@@ -491,9 +532,7 @@ def report_portfolio_classes(
         shortfall = ZERO
         if ZERO not in (dev_value, cur_value):
             if minimize:
-                shares, shortfall = minimal_split(
-                    dev_value, holdings, config.commodity_targets, total_value, threshold
-                )
+                shares, shortfall = minimal_split(dev_value, holdings, config.commodity_targets, total_value, threshold)
             else:
                 shares = proportional_split(dev_value, holdings, cur_value)
             member_trades = [
@@ -535,6 +574,19 @@ def report_portfolio_classes(
     }
 
 
+def resolve_threshold(config: AssetAllocationConfig, override: Optional[Decimal], default: Decimal) -> Decimal:
+    """Pick the divergence threshold to apply to one portfolio.
+
+    Precedence, most specific first: `override` (the directive option, which
+    applies to every portfolio), the portfolio's own `divergence-threshold`, and
+    `default` (the file-level setting, or the code default).
+    """
+    for candidate in (override, config.divergence_threshold):
+        if candidate is not None:
+            return candidate
+    return default
+
+
 def asset_allocation_report(
     entries: Sequence[Directive],
     pricer: Pricer,
@@ -545,32 +597,36 @@ def asset_allocation_report(
     asset_classes: Optional[dict[str, str]] = None,
     names: Optional[dict[str, str]] = None,
     minimize: bool = False,
+    threshold_override: Optional[Decimal] = None,
 ) -> list[dict]:
     """Build the asset allocation report for all configured portfolios.
 
     Each portfolio emits a `commodityReport` and/or a `classReport` sub-report,
-    depending on which target blocks it defines.
+    depending on which target blocks it defines. `threshold` applies to the
+    portfolios that do not set their own; `threshold_override` (when given)
+    applies to all of them (see `resolve_threshold`).
     """
     asset_classes = asset_classes or {}
     names = names or {}
     reports = []
     for config in portfolios:
         values, unpriced = portfolio_holdings(entries, pricer, config.accounts, target_currency, end_date)
+        portfolio_threshold = resolve_threshold(config, threshold_override, threshold)
         report: dict[str, Any] = {
             "name": config.name,
             "accounts": config.accounts,
             "currency": target_currency,
             "totalValue": sum(values.values(), ZERO),
-            "threshold": threshold,
+            "threshold": portfolio_threshold,
             "unpriced": unpriced,
             "commodityReport": None,
             "classReport": None,
         }
         if config.commodity_targets:
-            report["commodityReport"] = report_portfolio_commodities(config, values, threshold, names)
+            report["commodityReport"] = report_portfolio_commodities(config, values, portfolio_threshold, names)
         if config.class_targets:
             report["classReport"] = report_portfolio_classes(
-                config, values, asset_classes, threshold, names, minimize
+                config, values, asset_classes, portfolio_threshold, names, minimize
             )
         reports.append(report)
     return reports

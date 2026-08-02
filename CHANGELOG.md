@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-* feat: add Asset Allocation tab to compare current vs. target allocation and suggest rebalancing; targets can be set per commodity and/or per asset class (bucketed by hierarchical `asset-class` commodity metadata), with per-commodity rebalance suggestions and an optional fewest-trades strategy. The target allocation is read from a shareable YAML file (`asset_allocation_config`).
+* feat: add Asset Allocation tab to compare current vs. target allocation and suggest rebalancing; targets can be set per commodity and/or per asset class (bucketed by hierarchical `asset-class` commodity metadata), with per-commodity rebalance suggestions and an optional fewest-trades strategy. The target allocation is read from a shareable YAML file (`asset_allocation_config`), under each portfolio's `allocation` key; the divergence threshold can be set file-wide and/or per portfolio.
 
 ## v2.7.0 (2026-07-04)
 * feat: support multiple currencies per account [#190](https://github.com/andreasgerstmayr/fava-portfolio-returns/pull/190) ([@andreasgerstmayr](https://github.com/andreasgerstmayr))

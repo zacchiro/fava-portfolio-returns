@@ -2,10 +2,10 @@
 # Account patterns are regexes (matched like Beanquery's `~` operator); quote
 # them if they end with a colon, otherwise YAML parses them as a mapping.
 #
-# A portfolio may define per-commodity targets (`commodities`), per-asset-class
-# targets (`classes`), or both. Asset classes are read from each commodity's
-# `asset-class` metadata (hierarchical, ':'-separated). Each block should sum to
-# 100%.
+# A portfolio's `allocation` may define per-commodity targets (`commodities`),
+# per-asset-class targets (`classes`), or both. Asset classes are read from each
+# commodity's `asset-class` metadata (hierarchical, ':'-separated). Each block
+# should sum to 100%.
 
 # asset-class-key: asset-class  # commodity metadata key (default: asset-class)
 # divergence-threshold: 5%      # default threshold for flagging divergence
@@ -14,31 +14,34 @@ portfolios:
   - name: ETrade
     accounts:
       - "Assets:US:ETrade:"
-    commodities:
-      - commodity: ITOT
-        target: 40%
-      - commodity: VEA
-        target: 25%
-      - commodity: VHT
-        target: 20%
-      - commodity: GLD
-        target: 15%
-    classes:
-      - asset-class: stocks
-        target: 85%
-      - asset-class: gold
-        target: 15%
+    # divergence-threshold: 5%  # overrides the file-level one, for this portfolio
+    allocation:
+      commodities:
+        - commodity: ITOT
+          target: 40%
+        - commodity: VEA
+          target: 25%
+        - commodity: VHT
+          target: 20%
+        - commodity: GLD
+          target: 15%
+      classes:
+        - asset-class: stocks
+          target: 85%
+        - asset-class: gold
+          target: 15%
 
   - name: Vanguard
     accounts:
       - "Assets:US:Vanguard:"
-    commodities:
-      - commodity: RGAGX
-        target: 60%
-      - commodity: VBMPX
-        target: 40%
-    classes:
-      - asset-class: stocks
-        target: 60%
-      - asset-class: bonds
-        target: 40%
+    allocation:
+      commodities:
+        - commodity: RGAGX
+          target: 60%
+        - commodity: VBMPX
+          target: 40%
+      classes:
+        - asset-class: stocks
+          target: 60%
+        - asset-class: bonds
+          target: 40%

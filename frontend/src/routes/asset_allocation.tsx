@@ -159,9 +159,11 @@ function PortfolioReport({ portfolio }: { portfolio: AssetAllocationPortfolio })
   const currencyFormatter = useCurrencyFormatter(portfolio.currency);
   const [collapsed, setCollapsed] = useState(false);
 
-  const help = t("Accounts: {{accounts}} — Total value: {{total}}", {
+  // the threshold is per portfolio (a portfolio may override the global one)
+  const help = t("Accounts: {{accounts}} — Total value: {{total}} — Divergence threshold: ±{{threshold}}%", {
     accounts: portfolio.accounts.join(", "),
     total: currencyFormatter(portfolio.totalValue),
+    threshold: portfolio.threshold,
   });
 
   return (

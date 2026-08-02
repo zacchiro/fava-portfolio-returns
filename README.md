@@ -103,24 +103,26 @@ portfolios:
   - name: My Portfolio
     accounts:
       - "Assets:Broker:Investments:"
-    commodities:                # per-commodity targets, should sum to 100%
-      - commodity: ETF_FOO
-        target: 60%
-      - commodity: ETF_BAR
-        target: 40%
-    classes:                    # per-asset-class targets, should sum to 100%
-      - asset-class: stocks
-        target: 70%
-      - asset-class: bonds
-        target: 30%
+    # divergence-threshold: 3%  # optional; overrides the file-level one
+    allocation:                 # the target asset allocation, by...
+      commodities:              # ... commodity, should sum to 100%
+        - commodity: ETF_FOO
+          target: 60%
+        - commodity: ETF_BAR
+          target: 40%
+      classes:                  # ... asset class, should sum to 100%
+        - asset-class: stocks
+          target: 70%
+        - asset-class: bonds
+          target: 30%
 ```
 
 - `accounts`: one or more account regexes (matched like Beanquery's `~` operator); all commodities held in matching accounts are considered. Quote patterns ending in a colon, otherwise YAML parses them as a mapping.
-- `commodities`: the target allocation per commodity; the targets should sum to 100%.
-- `classes`: the target allocation per asset class. A commodity's asset class is read from its `asset-class` commodity metadata; classes are hierarchical and `:`-separated, so a commodity with asset class `stocks:health` counts under a `stocks` (or `stocks:health`) target, choosing the most specific match. In the by-class report the rebalance suggestion is broken down into concrete per-commodity buy/sell trades (split proportionally to current holdings, or — with the *Minimize trades* toggle — using the fewest trades that stay within each commodity's own ±threshold).
-- A portfolio may define `commodities`, `classes`, or both; each block is shown as a separate sub-report.
+- `allocation`: the target asset allocation of the portfolio, defined by `commodities`, `classes`, or both; each block is shown as a separate sub-report.
+- `allocation.commodities`: the target allocation per commodity; the targets should sum to 100%.
+- `allocation.classes`: the target allocation per asset class. A commodity's asset class is read from its `asset-class` commodity metadata; classes are hierarchical and `:`-separated, so a commodity with asset class `stocks:health` counts under a `stocks` (or `stocks:health`) target, choosing the most specific match. In the by-class report the rebalance suggestion is broken down into concrete per-commodity buy/sell trades (split proportionally to current holdings, or — with the *Minimize trades* toggle — using the fewest trades that stay within each commodity's own ±threshold).
 - `asset-class-key` (optional, default `asset-class`): the commodity metadata key holding the asset class.
-- `divergence-threshold` / `asset_allocation_threshold` (optional, default `5`): assets diverging by more than ±this many percentage points from their target are highlighted. The effective threshold is resolved as code default (`5`) < YAML `divergence-threshold` < directive `asset_allocation_threshold`.
+- `divergence-threshold` / `asset_allocation_threshold` (optional, default `5`): assets diverging by more than ±this many percentage points from their target are highlighted. `divergence-threshold` can be set at the top level of the file and/or inside a portfolio, which overrides it for that portfolio only. The effective threshold is resolved as code default (`5`) < top-level YAML `divergence-threshold` < per-portfolio `divergence-threshold` < directive `asset_allocation_threshold`.
 
 ## View Example Ledger
 `cd example; fava example.beancount`

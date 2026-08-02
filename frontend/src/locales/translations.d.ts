@@ -11,7 +11,7 @@ interface Resources {
     "<p>Total Profit and Loss computes the difference between the market value and the invested capital (sum of incoming and outgoing cash flows, including dividends and fees).</p>": "<p>Total Profit and Loss computes the difference between the market value and the invested capital (sum of incoming and outgoing cash flows, including dividends and fees).</p>";
     "<p>Volatility measures how strongly returns vary over time. It is based on period returns from the Time-Weighted Rate of Return (TWR), so the effects of cash flows are eliminated. The value shown is annualized: higher volatility means larger return swings (more risk), lower volatility means more stable returns.</p>": "<p>Volatility measures how strongly returns vary over time. It is based on period returns from the Time-Weighted Rate of Return (TWR), so the effects of cash flows are eliminated. The value shown is annualized: higher volatility means larger return swings (more risk), lower volatility means more stable returns.</p>";
     "<p>fava-portfolio-returns supports multiple ways to calculate the portfolio performance.</p>": "<p>fava-portfolio-returns supports multiple ways to calculate the portfolio performance.</p>";
-    "Accounts: {{accounts}} — Total value: {{total}}": "Accounts: {{accounts}} — Total value: {{total}}";
+    "Accounts: {{accounts}} — Total value: {{total}} — Divergence threshold: ±{{threshold}}%": "Accounts: {{accounts}} — Total value: {{total}} — Divergence threshold: ±{{threshold}}%";
     "All required prices are available in the ledger.": "All required prices are available in the ledger.";
     Allocation: "Allocation";
     Amount: "Amount";

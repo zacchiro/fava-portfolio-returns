@@ -11,7 +11,7 @@
   "<p>Total Profit and Loss computes the difference between the market value and the invested capital (sum of incoming and outgoing cash flows, including dividends and fees).</p>": "<p>总盈亏用于计算市值与投入资本之间的差额（流入与流出现金流之和，包括股息和费用）。</p>",
   "<p>Volatility measures how strongly returns vary over time. It is based on period returns from the Time-Weighted Rate of Return (TWR), so the effects of cash flows are eliminated. The value shown is annualized: higher volatility means larger return swings (more risk), lower volatility means more stable returns.</p>": "<p>波动率衡量收益率随时间变化的幅度。它基于时间加权收益率（TWR）的各期收益率，因此消除了现金流的影响。显示值为年化：波动率越高表示收益波动越大（风险更高），波动率越低表示收益更稳定。</p>",
   "⚠ Diverges by {{dev}} from target (beyond ±{{threshold}}%)": "",
-  "Accounts: {{accounts}} — Total value: {{total}}": "",
+  "Accounts: {{accounts}} — Total value: {{total}} — Divergence threshold: ±{{threshold}}%": "",
   "All required prices are available in the ledger.": "账本中已包含所有所需价格。",
   "Allocation": "资产配置",
   "Amount": "金额",

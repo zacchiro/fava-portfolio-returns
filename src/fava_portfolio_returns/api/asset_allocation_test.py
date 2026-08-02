@@ -52,13 +52,22 @@ def _load():
     return entries, pricer, names
 
 
-def build_report(commodity_targets=None, class_targets=None, threshold=Decimal("5"), accounts=None, minimize=False):
+def build_report(
+    commodity_targets=None,
+    class_targets=None,
+    threshold=Decimal("5"),
+    accounts=None,
+    minimize=False,
+    portfolio_threshold=None,
+    threshold_override=None,
+):
     entries, pricer, names = _load()
     config = AssetAllocationConfig(
         name="test",
         accounts=accounts or ["Assets:Broker:"],
         commodity_targets=commodity_targets or {},
         class_targets=class_targets or {},
+        divergence_threshold=portfolio_threshold,
     )
     reports = asset_allocation_report(
         entries,
@@ -70,6 +79,7 @@ def build_report(commodity_targets=None, class_targets=None, threshold=Decimal("
         asset_classes=commodity_asset_classes(entries, "asset-class"),
         names=names,
         minimize=minimize,
+        threshold_override=threshold_override,
     )
     return reports[0]
 
@@ -85,8 +95,10 @@ def test_parse_portfolios_commodities_and_classes():
         {
             "name": "p1",
             "accounts": ["Assets:Broker:"],
-            "commodities": [{"commodity": "AAA", "target": "60%"}, {"commodity": "BBB", "target": "40%"}],
-            "classes": [{"asset-class": "stocks", "target": "70%"}, {"asset-class": "bonds", "target": "30%"}],
+            "allocation": {
+                "commodities": [{"commodity": "AAA", "target": "60%"}, {"commodity": "BBB", "target": "40%"}],
+                "classes": [{"asset-class": "stocks", "target": "70%"}, {"asset-class": "bonds", "target": "30%"}],
+            },
         }
     ]
     [portfolio] = parse_portfolios(raw)
@@ -94,11 +106,54 @@ def test_parse_portfolios_commodities_and_classes():
     assert portfolio.accounts == ["Assets:Broker:"]
     assert portfolio.commodity_targets == {"AAA": Decimal("60"), "BBB": Decimal("40")}
     assert portfolio.class_targets == {"stocks": Decimal("70"), "bonds": Decimal("30")}
+    assert portfolio.divergence_threshold is None
 
 
 def test_parse_portfolios_requires_a_target_block():
     with pytest.raises(FavaAPIError):
         parse_portfolios([{"name": "p1", "accounts": ["Assets:Broker:"]}])
+    with pytest.raises(FavaAPIError):
+        parse_portfolios([{"name": "p1", "accounts": ["Assets:Broker:"], "allocation": {}}])
+
+
+def test_parse_portfolios_rejects_targets_outside_allocation():
+    # pre-'allocation' layout: the target blocks sat in the portfolio itself
+    with pytest.raises(FavaAPIError, match="allocation"):
+        parse_portfolios(
+            [
+                {
+                    "name": "p1",
+                    "accounts": ["Assets:Broker:"],
+                    "commodities": [{"commodity": "AAA", "target": "100%"}],
+                }
+            ]
+        )
+
+
+def test_parse_portfolios_rejects_non_mapping_allocation():
+    with pytest.raises(FavaAPIError):
+        parse_portfolios([{"name": "p1", "accounts": ["Assets:Broker:"], "allocation": ["AAA"]}])
+
+
+def test_parse_portfolios_divergence_threshold():
+    raw = [
+        {
+            "name": "p1",
+            "accounts": ["Assets:Broker:"],
+            "divergence-threshold": "3%",
+            "allocation": {"commodities": [{"commodity": "AAA", "target": "100%"}]},
+        }
+    ]
+    [portfolio] = parse_portfolios(raw)
+    assert portfolio.divergence_threshold == Decimal("3")
+
+    raw[0]["divergence-threshold"] = "150%"
+    with pytest.raises(FavaAPIError, match="out of range"):
+        parse_portfolios(raw)
+
+    raw[0]["divergence-threshold"] = "abc"
+    with pytest.raises(FavaAPIError, match="invalid divergence-threshold"):
+        parse_portfolios(raw)
 
 
 def test_parse_portfolios_rejects_duplicate_and_out_of_range():
@@ -108,7 +163,12 @@ def test_parse_portfolios_rejects_duplicate_and_out_of_range():
                 {
                     "name": "p1",
                     "accounts": ["Assets:Broker:"],
-                    "commodities": [{"commodity": "AAA", "target": "60%"}, {"commodity": "AAA", "target": "40%"}],
+                    "allocation": {
+                        "commodities": [
+                            {"commodity": "AAA", "target": "60%"},
+                            {"commodity": "AAA", "target": "40%"},
+                        ]
+                    },
                 }
             ]
         )
@@ -118,16 +178,17 @@ def test_parse_portfolios_rejects_duplicate_and_out_of_range():
                 {
                     "name": "p1",
                     "accounts": ["Assets:Broker:"],
-                    "classes": [{"asset-class": "stocks", "target": "150%"}],
+                    "allocation": {"classes": [{"asset-class": "stocks", "target": "150%"}]},
                 }
             ]
         )
 
 
 def test_parse_portfolios_rejects_duplicate_names():
+    allocation = {"commodities": [{"commodity": "AAA", "target": "100%"}]}
     raw = [
-        {"name": "p1", "accounts": ["Assets:Broker:"], "commodities": [{"commodity": "AAA", "target": "100%"}]},
-        {"name": "p1", "accounts": ["Assets:Broker:"], "commodities": [{"commodity": "BBB", "target": "100%"}]},
+        {"name": "p1", "accounts": ["Assets:Broker:"], "allocation": allocation},
+        {"name": "p1", "accounts": ["Assets:Broker:"], "allocation": allocation},
     ]
     with pytest.raises(FavaAPIError):
         parse_portfolios(raw)
@@ -148,16 +209,18 @@ portfolios:
   - name: p1
     accounts:
       - "Assets:Broker:"
-    commodities:
-      - commodity: AAA
-        target: 60%
-      - commodity: BBB
-        target: 40%
-    classes:
-      - asset-class: stocks
-        target: 60%
-      - asset-class: bonds
-        target: 40%
+    divergence-threshold: 3%
+    allocation:
+      commodities:
+        - commodity: AAA
+          target: 60%
+        - commodity: BBB
+          target: 40%
+      classes:
+        - asset-class: stocks
+          target: 60%
+        - asset-class: bonds
+          target: 40%
 """
     )
     config = load_asset_allocation_config(config_file)
@@ -166,6 +229,7 @@ portfolios:
     [portfolio] = config.portfolios
     assert portfolio.commodity_targets == {"AAA": Decimal("60"), "BBB": Decimal("40")}
     assert portfolio.class_targets == {"stocks": Decimal("60"), "bonds": Decimal("40")}
+    assert portfolio.divergence_threshold == Decimal("3")
 
 
 def test_load_config_defaults(tmp_path):
@@ -176,14 +240,16 @@ portfolios:
   - name: p1
     accounts:
       - "Assets:Broker:"
-    commodities:
-      - commodity: AAA
-        target: 100%
+    allocation:
+      commodities:
+        - commodity: AAA
+          target: 100%
 """
     )
     config = load_asset_allocation_config(config_file)
     assert config.asset_class_key == "asset-class"
     assert config.divergence_threshold is None
+    assert config.portfolios[0].divergence_threshold is None
 
 
 def test_load_config_missing_portfolios_key(tmp_path):
@@ -226,6 +292,31 @@ def test_commodity_report_unconfigured():
 
 def test_commodity_report_within_threshold():
     report = build_report(commodity_targets={"AAA": Decimal("60"), "BBB": Decimal("40")})
+    assert report["commodityReport"]["diverged"] is False
+
+
+def test_threshold_precedence():
+    # AAA/BBB are 60/40 against a 50/50 target, i.e. ±10pp off
+    targets = {"AAA": Decimal("50"), "BBB": Decimal("50")}
+
+    # file-level (or code) default applies when nothing else is set
+    report = build_report(commodity_targets=targets, threshold=Decimal("15"))
+    assert report["threshold"] == Decimal("15")
+    assert report["commodityReport"]["diverged"] is False
+
+    # the portfolio's own threshold wins over the file-level one
+    report = build_report(commodity_targets=targets, threshold=Decimal("15"), portfolio_threshold=Decimal("5"))
+    assert report["threshold"] == Decimal("5")
+    assert report["commodityReport"]["diverged"] is True
+
+    # the directive option wins over both
+    report = build_report(
+        commodity_targets=targets,
+        threshold=Decimal("5"),
+        portfolio_threshold=Decimal("5"),
+        threshold_override=Decimal("20"),
+    )
+    assert report["threshold"] == Decimal("20")
     assert report["commodityReport"]["diverged"] is False
 
 
@@ -284,9 +375,7 @@ def test_minimal_split_respects_capacity_and_reports_shortfall():
     members = {"AAA": Decimal("70"), "BBB": Decimal("30")}
     commodity_targets = {"AAA": Decimal("65"), "BBB": Decimal("35")}
     # sell 10 from a 100 total; AAA capacity down to (65-5)% = 60 => 10 capacity
-    assignments, shortfall = minimal_split(
-        Decimal("10"), members, commodity_targets, Decimal("100"), Decimal("5")
-    )
+    assignments, shortfall = minimal_split(Decimal("10"), members, commodity_targets, Decimal("100"), Decimal("5"))
     assert shortfall == Decimal("0.00")
     assert sum(a for _, _, a in assignments) == Decimal("10.00")
 

@@ -322,15 +322,15 @@ class FavaPortfolioReturns(FavaExtensionBase):
         )
         portfolios_config = config_file.portfolios if config_file else []
 
-        # threshold precedence: code default (5%) < config file < directive option
-        if ext_config.asset_allocation_threshold is not None:
-            threshold = ext_config.asset_allocation_threshold
-        elif config_file and config_file.divergence_threshold is not None:
+        # threshold precedence: code default (5%) < config file < per-portfolio
+        # (resolved by asset_allocation_report) < directive option
+        override = ext_config.asset_allocation_threshold
+        if override is not None and (override < Decimal(0) or override > Decimal(100)):
+            raise FavaAPIError(f"asset allocation threshold {override}% is out of range [0, 100]")
+        if config_file and config_file.divergence_threshold is not None:
             threshold = config_file.divergence_threshold
         else:
             threshold = DEFAULT_ASSET_ALLOCATION_THRESHOLD
-        if threshold < Decimal(0) or threshold > Decimal(100):
-            raise FavaAPIError(f"asset allocation threshold {threshold}% is out of range [0, 100]")
 
         asset_class_key = config_file.asset_class_key if config_file else "asset-class"
         asset_classes = commodity_asset_classes(entries, asset_class_key)
@@ -345,6 +345,7 @@ class FavaPortfolioReturns(FavaExtensionBase):
             asset_classes=asset_classes,
             names=names,
             minimize=minimize,
+            threshold_override=override,
         )
         return {"portfolios": portfolios}
 
